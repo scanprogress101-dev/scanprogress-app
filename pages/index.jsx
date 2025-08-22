@@ -1,41 +1,69 @@
-// pages/index.js
-import Link from 'next/link';
-import BrandHeader from '../components/BrandHeader';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import { supabase } from "../lib/supabaseClient";
 
 export default function Home() {
-  return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      <BrandHeader title="Welcome" subtitle="scanprogress.com" />
-      <main style={{ maxWidth: 1000, margin: '24px auto', padding: '0 16px' }}>
-        <div style={{ background: '#ffffff', padding: 24, borderRadius: 12, border: '1px solid #e6eef3' }}>
-          <h1 style={{ fontSize: 28, marginBottom: 12 }}>ScanProgress</h1>
-          <p style={{ color: '#475569', marginBottom: 16 }}>
-            Track body composition changes from your InBody scans. This is a live prototype.
-          </p>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <Link href="/login" style={btn()}>Login</Link>
-            <Link href="/dashboard" style={btn('ghost')}>Store Dashboard</Link>
-            <Link href="/scans" style={btn('ghost')}>Customer Scan History</Link>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
-}
+  const router = useRouter();
+  const [checking, setChecking] = useState(true);
 
-function btn(variant) {
-  const base = {
-    display: 'inline-block',
-    padding: '10px 14px',
-    borderRadius: 10,
-    border: '1px solid #0ea5e9',
-    color: '#fff',
-    background: 'linear-gradient(135deg,#0ea5e9,#14b8a6)',
-    textDecoration: 'none',
-    fontWeight: 600
-  };
-  if (variant === 'ghost') {
-    return { ...base, background: 'transparent', color: '#0ea5e9' };
-  }
-  return base;
+  useEffect(() => {
+    // If already signed in, take them where they belong.
+    // Default: /dashboard (store staff) or /scans (customers). If you don’t have roles yet, pick one.
+    const run = async () => {
+      const { data } = await supabase.auth.getSession();
+      const session = data?.session;
+      if (session?.user) {
+        // If you store a role, uncomment and route by role.
+        // const role = session.user.user_metadata?.role;
+        // if (role === "store") router.replace("/dashboard");
+        // else router.replace("/scans");
+        router.replace("/dashboard"); // or "/scans" if you prefer
+      } else {
+        setChecking(false);
+      }
+    };
+    run();
+  }, [router]);
+
+  if (checking) return null;
+
+  return (
+    <main className="min-h-screen bg-slate-50">
+      <div className="max-w-3xl mx-auto px-6 py-16">
+        <div className="rounded-2xl bg-white shadow p-8">
+          <h1 className="text-3xl font-semibold text-slate-800">ScanProgress</h1>
+          <p className="mt-2 text-slate-600">
+            Track body composition changes from your InBody scans.
+          </p>
+
+          <div className="mt-8 flex gap-3 flex-wrap">
+            <button
+              className="px-5 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-700"
+              onClick={() => router.push("/login")}
+            >
+              Login
+            </button>
+
+            <button
+              className="px-5 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
+              onClick={() => router.push("/signup")}
+            >
+              Customer Sign&nbsp;Up
+            </button>
+
+            <button
+              className="px-5 py-2 rounded-lg text-slate-600 underline"
+              onClick={() => router.push("/forgot-password")}
+            >
+              Forgot password?
+            </button>
+          </div>
+
+          <p className="mt-6 text-xs text-slate-400">
+            Sign‑up is for **your store’s customers** only. (Not for other Nutrishop locations.)
+          </p>
+        </div>
+      </div>
+    </main>
+  );
 }
