@@ -1,37 +1,31 @@
-// pages/api/inbody.js
-import { supabaseAdmin } from '../../lib/supabaseAdmin';
-
 export default async function handler(req, res) {
-  // Basic logging so we can see what Vercel is receiving
-  console.log('Incoming method:', req.method);
-  console.log('Headers Content-Type:', req.headers['content-type']);
-
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed', method: req.method });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Ensure JSON
-  if (!req.headers['content-type']?.toLowerCase().includes('application/json')) {
-    return res.status(400).json({ error: 'Content-Type must be application/json' });
+  // Simple auth
+  const expected = process.env.INBODY_WEBHOOK_SECRET;
+  const received = req.headers['x-inbody-signature'];
+  if (!expected || received !== expected) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
-    const scanData = req.body; // Next.js parses JSON automatically
-
-    // Insert raw payload to staging
-    const { data, error } = await supabaseAdmin
+    const scanData = req.body; // JSON
+    const { data, error } = await supabase
       .from('inbody_570_stage')
       .insert([{ raw_data: scanData }])
-      .select('vsid, created_at');
+      .select('vsid, created_at')
+      .single();
 
     if (error) {
       console.error('Supabase insert error:', error);
       return res.status(500).json({ error: 'Failed to store scan' });
     }
 
-    return res.status(200).json({ ok: true, stored: data?.[0] ?? null });
-  } catch (err) {
-    console.error('API error:', err);
+    return res.status(200).json({ ok: true, stored: data });
+  } catch (e) {
+    console.error('API error:', e);
     return res.status(500).json({ error: 'Server error' });
   }
 }
