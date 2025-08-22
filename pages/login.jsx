@@ -1,58 +1,138 @@
 // pages/login.jsx
-import { useState } from 'react';
-import BrandHeader from '../components/BrandHeader';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
+import { supabase } from '../lib/supabaseClient';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
-  const [pass, setPass]   = useState('');
-  const [msg, setMsg]     = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
 
-  async function onLogin(e) {
+  // If already signed in, go straight to dashboard
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      if (data?.session) {
+        router.replace('/dashboard');
+      }
+    })();
+    return () => { mounted = false; };
+  }, [router]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setMsg('Signing in…');
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) setMsg(error.message);
-    else setMsg('Signed in. Go to Dashboard.');
-  }
+    setError('');
+    setNotice('');
+    setLoading(true);
+
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    setLoading(false);
+
+    if (signInError) {
+      setError(signInError.message || 'Sign in failed');
+      return;
+    }
+
+    if (data?.session) {
+      setNotice('Signed in. Redirecting…');
+      // replace so user can’t go “Back” to /login
+      router.replace('/dashboard');
+      return;
+    }
+
+    setError('Unexpected response: no session returned.');
+  };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg,#f0f9ff,#ecfeff)' }}>
-      <BrandHeader title="Login" subtitle="Secure access" />
-      <main style={{ display:'grid', placeItems:'center', padding: 24 }}>
-        <div style={{
-          width: 420, background:'#fff', border:'1px solid #e6eef3', borderRadius: 12, padding: 24,
-          boxShadow:'0 10px 30px rgba(2,132,199,0.08)'
-        }}>
-          <h1 style={{ fontSize: 24, marginBottom: 12 }}>Welcome back</h1>
-          <form onSubmit={onLogin} style={{ display:'grid', gap: 12 }}>
-            <label style={lbl()}>
-              Email
-              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required style={inp()} />
-            </label>
-            <label style={lbl()}>
-              Password
-              <input type="password" value={pass} onChange={e=>setPass(e.target.value)} required style={inp()} />
-            </label>
-            <button type="submit" style={cta()}>Sign in</button>
-          </form>
-          <div style={{ marginTop: 12, fontSize: 12, color:'#64748b' }}>{msg}</div>
+    <div className="min-h-screen bg-[#F6FAFB] bg-gradient-to-b from-[#F0F7F8] to-white">
+      {/* Top bar */}
+      <header className="max-w-6xl mx-auto px-6 pt-6">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-md bg-teal-500" />
+          <div>
+            <div className="text-lg font-semibold">ScanProgress</div>
+            <div className="text-sm text-slate-500">Login</div>
+          </div>
+          <div className="ml-auto text-xs text-slate-400">Secure access</div>
+        </div>
+      </header>
+
+      {/* Card */}
+      <main className="max-w-6xl mx-auto px-6">
+        <div className="mx-auto mt-12 sm:mt-16 w-full max-w-xl">
+          <div className="rounded-2xl bg-white shadow-xl ring-1 ring-slate-100 p-6 sm:p-8">
+            <h1 className="text-2xl font-semibold mb-2">Welcome back</h1>
+
+            {notice ? (
+              <div className="mb-4 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
+                {notice}
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="mb-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">
+                {error}
+              </div>
+            ) : null}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-md border-slate-200 focus:border-teal-400 focus:ring-teal-400
+                             bg-white px-3 py-2 text-slate-900 shadow-sm outline-none"
+                  placeholder="you@company.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-md border-slate-200 focus:border-teal-400 focus:ring-teal-400
+                             bg-white px-3 py-2 text-slate-900 shadow-sm outline-none"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-md bg-teal-600 hover:bg-teal-700 disabled:opacity-60
+                           text-white font-semibold py-2.5 transition-colors shadow-sm"
+              >
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
+
+            <p className="mt-3 text-xs text-slate-500">
+              Trouble signing in? Ask your ScanProgress admin to reset your account.
+            </p>
+          </div>
         </div>
       </main>
     </div>
   );
 }
-
-const lbl = () => ({ display:'grid', gap:6, fontSize:13, color:'#475569' });
-const inp = () => ({
-  padding:'10px 12px', borderRadius:10, border:'1px solid #cbd5e1', outline:'none'
-});
-const cta = () => ({
-  padding:'10px 14px', borderRadius:10, border:'1px solid #0ea5e9',
-  background:'linear-gradient(135deg,#0ea5e9,#14b8a6)', color:'#fff', fontWeight:700
-});
