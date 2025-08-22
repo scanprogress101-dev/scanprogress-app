@@ -1,36 +1,37 @@
 // pages/api/inbody.js
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,   // use the admin key on the server
-  { auth: { persistSession: false } }
-);
+import { supabaseAdmin } from '../../lib/supabaseAdmin';
 
 export default async function handler(req, res) {
+  // Basic logging so we can see what Vercel is receiving
+  console.log('Incoming method:', req.method);
+  console.log('Headers Content-Type:', req.headers['content-type']);
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed', method: req.method });
+  }
+
+  // Ensure JSON
+  if (!req.headers['content-type']?.toLowerCase().includes('application/json')) {
+    return res.status(400).json({ error: 'Content-Type must be application/json' });
   }
 
   try {
-    const scanData = req.body;
+    const scanData = req.body; // Next.js parses JSON automatically
 
-    const { data, error } = await supabase
+    // Insert raw payload to staging
+    const { data, error } = await supabaseAdmin
       .from('inbody_570_stage')
       .insert([{ raw_data: scanData }])
-      .select('id')
-      .single();
+      .select('vsid, created_at');
 
     if (error) {
       console.error('Supabase insert error:', error);
-      return res
-        .status(500)
-        .json({ error: 'Failed to store scan', detail: error.message });
+      return res.status(500).json({ error: 'Failed to store scan' });
     }
 
-    return res.status(200).json({ ok: true, message: 'Scan received', id: data.id });
+    return res.status(200).json({ ok: true, stored: data?.[0] ?? null });
   } catch (err) {
     console.error('API error:', err);
-    return res.status(500).json({ error: 'Server error', detail: err.message });
+    return res.status(500).json({ error: 'Server error' });
   }
 }
