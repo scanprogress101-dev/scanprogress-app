@@ -1,5 +1,5 @@
 // pages/api/inbody.js
-import supabaseAdmin from '../../../lib/supabaseAdmin';
+import supabaseAdmin from '../../lib/supabaseAdmin';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
