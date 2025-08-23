@@ -12,11 +12,6 @@ function okText(res, text = "OK") {
   res.send(text);
 }
 
-function json(res, status, obj) {
-  res.status(status).setHeader("Content-Type", "application/json");
-  res.json(obj);
-}
-
 function checkHeaderSecret(req) {
   const expected = process.env.INBODY_WEBHOOK_SECRET || "";
   if (!expected) return { enabled: false, ok: false };
@@ -41,38 +36,38 @@ function checkBasicAuth(req) {
 export default async function handler(req, res) {
   setCors(res);
 
-  // 1) CORS preflight
+  // 1) Preflight
   if (req.method === "OPTIONS") return res.status(204).end();
 
   // 2) Health check
-  if (req.method === "GET") return json(res, 200, { ok: true, route: "/api/inbodyapi", ts: new Date().toISOString() });
+  if (req.method === "GET") {
+    return res.status(200).json({ ok: true, route: "/api/inbodyapi", ts: new Date().toISOString() });
+  }
 
   // 3) Only POST for data
-  if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-  // 4) Auth — allow either header secret OR Basic Auth (if configured)
+  // 4) Auth — accept either x-inbody-signature or Basic Auth (if configured)
   const secret = checkHeaderSecret(req);
   const basic = checkBasicAuth(req);
-
   if (secret.enabled || basic.enabled) {
-    if (!(secret.ok || basic.ok)) return json(res, 401, { error: "Unauthorized" });
+    if (!(secret.ok || basic.ok)) return res.status(401).json({ error: "Unauthorized" });
   }
-  // If neither is configured, accept (useful for early testing)
 
   try {
-    // Next.js API routes parse JSON and urlencoded bodies by default
+    // Next parses JSON and urlencoded bodies by default
     const payload = req.body ?? null;
     if (!payload || (typeof payload === "object" && Object.keys(payload).length === 0)) {
-      // Some forwarders send text; try to read raw if present (not typical)
-      // but keep it simple — reject empty body:
-      return json(res, 400, { error: "No body" });
+      return res.status(400).json({ error: "No body" });
     }
 
-    // Optional: normalize common fields
+    // Optional normalization
     const deviceId = payload.device_id || payload.deviceId || payload.device || null;
     const memberId = payload.member_id || payload.memberId || payload.account || null;
 
-    // Log (replace with DB/queue)
+    // Log (swap for DB/queue)
     console.log("[INBODY] incoming payload", {
       vsid: randomUUID(),
       receivedAt: new Date().toISOString(),
@@ -81,11 +76,9 @@ export default async function handler(req, res) {
       payload,
     });
 
-    // 5) Respond quickly so device/cloud doesn’t retry
-    // Use plain text OK (most devices look for this)
-    // For manual/debug, ?verbose=1 returns JSON echo
+    // Plain OK for device; JSON echo if ?verbose=1
     if (req.query?.verbose === "1") {
-      return json(res, 200, {
+      return res.status(200).json({
         ok: true,
         stored: { vsid: randomUUID(), created_at: new Date().toISOString() },
         echo: payload,
@@ -94,4 +87,6 @@ export default async function handler(req, res) {
     return okText(res, "OK");
   } catch (err) {
     console.error("inbodyapi error:", err);
-    return json(res, 500, { er
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+}
